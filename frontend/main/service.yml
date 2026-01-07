@@ -5,10 +5,11 @@ metadata:
   labels:
     app: main-frontend
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: main-frontend
   ports:
     - protocol: TCP
       port: 80
       targetPort: 80
+
