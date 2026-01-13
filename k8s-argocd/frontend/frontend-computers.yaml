@@ -6,7 +6,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/CloudTechDevOps/google-store-DevOps-project.git
+    repoURL: https://github.com/sumanthb9908/googles
     path: frontend/computers
     targetRevision: main
   destination:
