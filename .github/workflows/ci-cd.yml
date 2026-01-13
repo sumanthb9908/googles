@@ -17,7 +17,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     
-    # Skip if [skip ci] in commit message
+    # Skip if [skip ci] in commit messageS
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
 
     steps:
