@@ -54,7 +54,7 @@ jobs:
           # -------- Frontend --------
           for service in $FRONTEND_SERVICES; do
             FOLDER="frontend/$service"
-            REPO_NAME="googles-$service"
+            REPO_NAME="shopping-site-$service"
             IMAGE_URI="$ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG"
 
             if [ ! -f "$FOLDER/Dockerfile" ]; then
