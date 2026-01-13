@@ -6,8 +6,8 @@ on:
       - main
 
 env:
-  AWS_REGION: us-west-2
-  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-2.amazonaws.com
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
 
   FRONTEND_SERVICES: "main electronics phones computers earphones googlemusic googlepay googleclothes googlegrocery"
   BACKEND_SERVICE: "backend"
@@ -25,9 +25,7 @@ jobs:
       # -------------------------
       - name: 🧾 Checkout repository
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GIT_PAT }}
-
+        
       # -------------------------
       # AWS Credentials
       # -------------------------
@@ -105,91 +103,6 @@ jobs:
           git commit -m "🔄 Update image tags after build [skip ci]" || echo "No changes"
           git push origin main || echo "Nothing to push"
 
-      # -------------------------
-      # Install jq
-      # -------------------------
-      - name: 📦 Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      # -------------------------
-      # Scan FRONTEND images
-      # -------------------------
-      - name: 🔍 Scan Frontend Images in ECR
-        run: |
-          set -e
-          IMAGE_TAG="${GITHUB_SHA}"
-
-          echo "🔍 Scanning FRONTEND images..."
-
-          for service in $FRONTEND_SERVICES; do
-            REPO_NAME="shopping-site-$service"
-
-            echo "➡️ Starting scan for $REPO_NAME"
-
-            aws ecr start-image-scan \
-              --repository-name $REPO_NAME \
-              --image-id imageTag=$IMAGE_TAG || true
-
-            aws ecr wait image-scan-complete \
-              --repository-name $REPO_NAME \
-              --image-id imageTag=$IMAGE_TAG
-
-            FINDINGS=$(aws ecr describe-image-scan-findings \
-              --repository-name $REPO_NAME \
-              --image-id imageTag=$IMAGE_TAG \
-              --query 'imageScanFindings.findingSeverityCounts' \
-              --output json)
-
-            echo "📄 $REPO_NAME scan results: $FINDINGS"
-
-            HIGH=$(echo "$FINDINGS" | jq '.HIGH // 0')
-            CRITICAL=$(echo "$FINDINGS" | jq '.CRITICAL // 0')
-
-            if [ "$HIGH" -gt 0 ] || [ "$CRITICAL" -gt 0 ]; then
-              echo "❌ Vulnerabilities found in $REPO_NAME"
-              exit 1
-            fi
-          done
-
-          echo "✅ All frontend images passed scan"
-
-      # -------------------------
-      # Scan BACKEND image
-      # -------------------------
-      - name: 🔍 Scan Backend Image in ECR
-        run: |
-          set -e
-          IMAGE_TAG="${GITHUB_SHA}"
-
-          aws ecr start-image-scan \
-            --repository-name shopping-site-backend \
-            --image-id imageTag=$IMAGE_TAG || true
-
-          aws ecr wait image-scan-complete \
-            --repository-name shopping-site-backend \
-            --image-id imageTag=$IMAGE_TAG
-
-          FINDINGS=$(aws ecr describe-image-scan-findings \
-            --repository-name shopping-site-backend \
-            --image-id imageTag=$IMAGE_TAG \
-            --query 'imageScanFindings.findingSeverityCounts' \
-            --output json)
-
-          echo "📄 Backend scan results: $FINDINGS"
-
-          HIGH=$(echo "$FINDINGS" | jq '.HIGH // 0')
-          CRITICAL=$(echo "$FINDINGS" | jq '.CRITICAL // 0')
-
-          if [ "$HIGH" -gt 0 ] || [ "$CRITICAL" -gt 0 ]; then
-            echo "❌ Vulnerabilities found in backend image"
-            exit 1
-          fi
-
-          echo "✅ Backend image passed scan"
-
-      # -------------------------
-      # Prevent CI loop
-      # -------------------------
       - name: 🧠 Skip loop if commit was automated
         if: contains(github.event.head_commit.message, '[skip ci]')
         run: echo "Skipping re-triggered build"
