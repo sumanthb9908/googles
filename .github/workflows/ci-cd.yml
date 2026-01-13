@@ -1,164 +1,109 @@
-name: CI/CD for Shopping Site (Frontend + Backend)
+name: CI/CD – Shopping Site (Matrix)
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
 
 env:
   AWS_REGION: us-east-1
-  FRONTEND_SERVICES: "main electronics phones computers earphones googlemusic googlepay googleclothes googlegrocery"
-  BACKEND_SERVICE: "backend"
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+  IMAGE_TAG: ${{ github.sha }}
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  deploy:
+# =========================
+# CI – Build & Push Images
+# =========================
+  build:
     runs-on: ubuntu-latest
-    
-    # Skip if [skip ci] in commit messageS
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+
+    strategy:
+      matrix:
+        service: 
+          - name: main
+            path: frontend/main
+          - name: electronics
+            path: frontend/electronics
+          - name: phones
+            path: frontend/phones
+          - name: computers
+            path: frontend/computers
+          - name: earphones
+            path: frontend/earphones
+          - name: googlemusic
+            path: frontend/googlemusic
+          - name: googlepay
+            path: frontend/googlepay
+          - name: googleclothes
+            path: frontend/googleclothes
+          - name: googlegrocery
+            path: frontend/googlegrocery
+          - name: backend
+            path: backend
 
     steps:
-      # -------------------------
-      # Checkout
-      # -------------------------
-      - name: 🧾 Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # -------------------------
-      # AWS Credentials
-      # -------------------------
-      - name: 🔧 Configure AWS credentials
+      - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # -------------------------
-      # ECR Login
-      # -------------------------
-      - name: 📦 Login to Amazon ECR
+      - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # -------------------------
-      # Build & Push Images
-      # -------------------------
-      - name: 🛠 Build and Push Docker Images
+      - name: Build & Push Image
         run: |
-          set -euo pipefail
-          
-          # Construct ECR registry URL
-          AWS_ACCOUNT_ID="${{ secrets.AWS_ACCOUNT_ID }}"
-          AWS_REGION="${{ env.AWS_REGION }}"
-          ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-          IMAGE_TAG="${GITHUB_SHA}"
-          
-          echo "════════════════════════════════════════"
-          echo "📋 Build Configuration:"
-          echo "   AWS Account: ${AWS_ACCOUNT_ID}"
-          echo "   Region: ${AWS_REGION}"
-          echo "   ECR Registry: ${ECR_REGISTRY}"
-          echo "   Image Tag: ${IMAGE_TAG}"
-          echo "════════════════════════════════════════"
-          echo ""
+          set -e
 
-          # -------- Frontend --------
-          echo "🌐 Building Frontend Services..."
-          for service in ${{ env.FRONTEND_SERVICES }}; do
-            FOLDER="frontend/${service}"
-            REPO_NAME="shopping-site-${service}"
-            IMAGE_URI="${ECR_REGISTRY}/${REPO_NAME}:${IMAGE_TAG}"
-
-            if [ ! -f "${FOLDER}/Dockerfile" ]; then
-              echo "⚠️  No Dockerfile in ${FOLDER}, skipping..."
-              continue
-            fi
-
-            echo ""
-            echo "🚀 Building ${service}"
-            echo "   Repo: ${REPO_NAME}"
-            echo "   Image: ${IMAGE_URI}"
-
-            # Create repo if doesn't exist
-            aws ecr describe-repositories \
-              --repository-names ${REPO_NAME} \
-              --region ${AWS_REGION} >/dev/null 2>&1 || \
-              aws ecr create-repository \
-                --repository-name ${REPO_NAME} \
-                --region ${AWS_REGION} \
-                --image-scanning-configuration scanOnPush=false \
-                --encryption-configuration encryptionType=AES256
-
-            # Build
-            docker build -t "${IMAGE_URI}" "${FOLDER}"
-            
-            # Push with commit SHA
-            docker push "${IMAGE_URI}"
-            
-            # Tag and push as latest
-            docker tag "${IMAGE_URI}" "${ECR_REGISTRY}/${REPO_NAME}:latest"
-            docker push "${ECR_REGISTRY}/${REPO_NAME}:latest"
-
-            # Update deployment file
-            if [ -f "${FOLDER}/deployment.yml" ]; then
-              sed -i "s|image:.*${REPO_NAME}.*|image: ${IMAGE_URI}|g" "${FOLDER}/deployment.yml"
-            fi
-            
-            echo "✅ ${service} complete"
-          done
-
-          # -------- Backend --------
-          echo ""
-          echo "⚙️  Building Backend..."
-          FOLDER="backend"
-          REPO_NAME="shopping-site-backend"
-          IMAGE_URI="${ECR_REGISTRY}/${REPO_NAME}:${IMAGE_TAG}"
-
-          echo "   Repo: ${REPO_NAME}"
-          echo "   Image: ${IMAGE_URI}"
-
-          aws ecr describe-repositories \
-            --repository-names ${REPO_NAME} \
-            --region ${AWS_REGION} >/dev/null 2>&1 || \
-            aws ecr create-repository \
-              --repository-name ${REPO_NAME} \
-              --region ${AWS_REGION} \
-              --image-scanning-configuration scanOnPush=false \
-              --encryption-configuration encryptionType=AES256
-
-          docker build -t "${IMAGE_URI}" "${FOLDER}"
-          docker push "${IMAGE_URI}"
-          
-          docker tag "${IMAGE_URI}" "${ECR_REGISTRY}/${REPO_NAME}:latest"
-          docker push "${ECR_REGISTRY}/${REPO_NAME}:latest"
-
-          if [ -f "${FOLDER}/backend-deployment.yml" ]; then
-            sed -i "s|image:.*${REPO_NAME}.*|image: ${IMAGE_URI}|g" "${FOLDER}/backend-deployment.yml"
-          fi
-          
-          echo "✅ Backend complete"
-          echo ""
-          echo "════════════════════════════════════════"
-          echo "✅ All builds completed!"
-          echo "════════════════════════════════════════"
-
-      # -------------------------
-      # Commit YAML changes
-      # -------------------------
-      - name: 🔄 Commit updated YAML files
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-          git add frontend/**/deployment.yml backend/backend-deployment.yml
-          
-          if git diff --staged --quiet; then
-            echo "ℹ️  No changes to commit"
+          if [ "${{ matrix.service.name }}" = "backend" ]; then
+            REPO="shopping-site-backend"
           else
-            git commit -m "🔄 Update image tags to ${GITHUB_SHA} [skip ci]"
-            git push origin main
-            echo "✅ Changes pushed"
+            REPO="shopping-site-${{ matrix.service.name }}"
           fi
+
+          IMAGE="$ECR_REGISTRY/$REPO:$IMAGE_TAG"
+
+          echo "Building $REPO from ${{ matrix.service.path }}"
+
+          aws ecr describe-repositories --repository-names $REPO >/dev/null 2>&1 || \
+          aws ecr create-repository --repository-name $REPO
+
+          docker build -t $IMAGE ${{ matrix.service.path }}
+          docker push $IMAGE
+
+          docker tag $IMAGE $ECR_REGISTRY/$REPO:latest
+          docker push $ECR_REGISTRY/$REPO:latest
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --region us-east-1 --name google
+
+      - name: Deploy Backend
+        run: |
+          kubectl set image deployment/backend-deployment \
+            backend-container=$ECR_REGISTRY/shopping-site-backend:$IMAGE_TAG
+
+      - name: Deploy Frontend
+        run: |
+          for svc in main electronics phones computers earphones googlemusic googlepay googleclothes googlegrocery; do
+            kubectl set image deployment/frontend-$svc \
+              frontend-container=$ECR_REGISTRY/shopping-site-$svc:$IMAGE_TAG
+          done
