@@ -104,8 +104,7 @@ jobs:
           git commit -m "🔄 Update image tags after build [skip ci]" || echo "No changes"
           git push origin main || echo "Nothing to push"
 
-     
-
+    
       # -------------------------
       # Prevent CI loop
       # -------------------------
