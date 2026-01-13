@@ -9,9 +9,9 @@ CORS(app)
 
 # ---------------- DATABASE CONFIG ----------------
 db_config = {
-    "host": "micro.cjs80048kd9y.us-west-2.rds.amazonaws.com",
-    "user": "admin",
-    "password": "Cloud123",
+    "host": "suman-db.c6rk4uy22m0w.us-east-1.rds.amazonaws.com",
+    "user": "suman",
+    "password": "sumanth123",
     "database": "cloud"
 }
 
@@ -116,6 +116,7 @@ def get_users():
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
     
+
 
 
 
